@@ -1,0 +1,317 @@
+
+sed 's/ /\./g' pre_name.txt | sed 's/\t/_/g' > name.txt
+sed  's/ /\./g' pre_good_gene_name.txt | sed 's/\t/_/g' > gene_name.txt
+mkdir -p seqs
+#rm seqs/cycle_n.fasta
+for type_ in `cat gene_name.txt`
+do
+type=${type_%_*}
+type_fullname=${type_#*_}
+type_fullname=`echo $type_fullname | sed 's/\./ /g'`
+echo $type"   " $type_fullname
+mkdir -p seqs/${type}
+for qurey_name_ in `cat name.txt`
+do
+echo $qurey_name_
+name_id=${qurey_name_%_*}
+qurey_name=${qurey_name_#*_}
+qurey_name=`echo $qurey_name | sed "s/\./ /g"`
+echo $qurey_name
+echo $name_id","${type}
+#rm seqs/${type}/${name_id}_${type}.fasta
+#####-source genbank
+esearch -db protein -query "${qurey_name}","${type}" | \
+    efilter -feature cds -location plastid |\
+    efetch -format fasta >> seqs/${type}/${name_id}_${type}.fasta
+###############################
+for cycle in {1..2}
+do
+a=`wc -l seqs/${type}/${name_id}_${type}.fasta`
+a=${a% *}
+if [[ $a < 1 ]]
+then
+qurey_name=${qurey_name%; *}
+echo $qurey_name
+#-source genbank
+esearch -db protein -query "${qurey_name}","${type}" | \
+    efilter -feature cds -location    plastid |\
+    efetch -format fasta > seqs/${type}/${name_id}_${type}.fasta
+echo  ${type}_${name_id}_$a"----"$cycle
+echo  ${type}_${name_id}_$a"----"$cycle >> seqs/cycle_n.fasta
+fi
+done
+###########################
+done
+done
+
+
+sed 's/ /\./g' pre_name.txt | sed 's/\t/_/g' > name.txt
+sed  's/ /\./g' pre_gene_name_sed.txt | sed 's/\t/_/g' > gene_name.txt
+##################################################################################################################################filter
+for type_ in `cat gene_name.txt`
+do
+type=${type_%_*}
+type_fullname=${type_#*_}
+type_fullname=`echo $type_fullname | sed 's/\./ /g'| sed 's/" "/\./g'`
+for qurey_name_ in `cat name.txt`
+do
+name_id=${qurey_name_%_*}
+qurey_name=${qurey_name_#*_}
+qurey_name=`echo $qurey_name | sed "s/;\./; /g"`
+echo $name_id","${type}
+sed -i "s/$type_fullname/$type/g" seqs/${type}/${name_id}_${type}.fasta
+done
+done
+
+
+sed  's/ /\./g' pre_good_gene_name.txt | sed 's/\t/_/g' > gene_name.txt
+mkdir -p seqs_filtered
+mkdir -p accession_unique
+mkdir -p seqs_unique
+for type_ in `cat gene_name.txt`
+do
+type=${type_%_*}
+type_fullname=${type_#*_}
+type_fullname=`echo $type_fullname | sed 's/\./ /g'`
+echo $type"   " $type_fullname
+mkdir -p seqs_filtered/${type}
+mkdir -p seqs_unique/${type}
+mkdir -p accession_unique/${type}
+for qurey_name_ in `cat name.txt`
+do
+name_id=${qurey_name_%_*}
+qurey_name=${qurey_name_#*_}
+qurey_name=`echo $qurey_name | sed "s/;\./; /g"`
+echo $name_id","${type}
+awk 'BEGIN{RS=">"; FS="\n";OFS="";ORS=""}{if ($0~/'$type'/ && length($2)>30){print ">",$1"\n";for (i=2;i<=NF;i++){print $i};print "\n"}}' seqs/${type}/${name_id}_${type}.fasta > seqs_filtered/${type}/${name_id}_${type}.fasta
+awk 'BEGIN{RS=">"; FS="\n";OFS="";ORS=""}(NR>1){abund[$1]++;unique_accession[$1]=$2}END{for (i in unique_accession){print ">"i";size="abund[i]"\n"unique_accession[i]"\n"}}' seqs_filtered/${type}/${name_id}_${type}.fasta > accession_unique/${type}/${name_id}_${type}.fasta
+
+awk 'BEGIN{RS=">"; FS="\n";OFS="";ORS=""}(NR>1){abund[$2]++;unique_seqs[$2]=$1}END{for (i in unique_seqs){split(unique_seqs[i],a," ");print ">"a[1]";size="abund[i]"\n"i"\n"}}' accession_unique/${type}/${name_id}_${type}.fasta > seqs_unique/${type}/${name_id}_${type}.fasta
+done
+done
+
+####################################################################################################aa转dna
+
+mkdir -p step1_aa2dna
+
+for type_ in `cat gene_name.txt`
+do
+type=${type_%_*}
+mkdir -p step1_aa2dna/${type}
+for qurey_name_ in `cat name.txt`
+do
+name_id=${qurey_name_%_*}
+echo $name_id","${type}
+awk 'BEGIN{RS=">"; FS="\n";OFS="";ORS=""}{\
+   if(ARGIND==1 && FNR>1){split($1,a,":");aa2dna[a[1]]=a[2]}\
+   else if(ARGIND==2 && FNR>1){print ">"$1"\n";split($2,seq_aa,"");for (i in seq_aa){print aa2dna[seq_aa[i]]""};print "\n"}\
+   }' aa2dna.txt seqs_unique/${type}/${name_id}_${type}.fasta > step1_aa2dna/${type}/${name_id}_${type}.fasta
+done
+done
+
+
+
+
+
+id=0.97
+mkdir -p step2_cluster
+for type_ in `cat gene_name.txt`
+do
+type=${type_%_*}
+mkdir -p step2_cluster/${type}
+mkdir -p step2_cluster/$type/centroids
+mkdir -p step2_cluster/$type/consout
+mkdir -p step2_cluster/$type/centroids_${id}
+mkdir -p step2_cluster/$type/consout_${id}
+for qurey_name_ in `cat name.txt`
+do
+name_id=${qurey_name_%_*}
+echo $name_id","${type}
+vsearch --cluster_fast step1_aa2dna/${type}/${name_id}_${type}.fasta --id $id --centroids step2_cluster/$type/centroids/${name_id}.fasta --clusters cluster. --consout step2_cluster/$type/consout/${name_id}.fasta --sizeout --sizein
+vsearch --sortbysize step2_cluster/$type/centroids/${name_id}.fasta --output step2_cluster/$type/centroids_${id}/${name_id}.fasta --sizein
+vsearch --sortbysize step2_cluster/$type/consout/${name_id}.fasta --output step2_cluster/$type/consout_${id}/${name_id}.fasta --sizein
+done
+done
+rm cluster.[0-9]*
+
+
+sed 's/ /\./g' pre_name.txt | sed 's/\t/_/g' > name.txt
+sed  's/ /\./g' pre_good_gene_name.txt | sed 's/\t/_/g' > gene_name.txt
+mkdir -p tree
+for type_ in `cat gene_name.txt`
+do
+type=${type_%_*}
+rm tree/rep_set_${type}.fasta
+rm tree/centroids_id_${type}.txt
+for qurey_name_ in `cat name.txt`
+do
+name_id=${qurey_name_%_*}
+echo $name_id","${type}
+awk 'BEGIN{RS=">"; FS="\n";OFS="";ORS=""}{if(NR>1 && NR <5){ \
+      if(NR==2){\
+      print ">'${name_id}'."(NR-1)"\t"$1"\n" >>  "tree/centroids_id_'${type}'.txt"; print ">'${name_id}'\n" >> "tree/rep_set_'${type}'.fasta";for (i=2;i<=NF;i++){print toupper($i)>> "tree/rep_set_'${type}'.fasta"};print "\n" >> "tree/rep_set_'${type}'.fasta" \
+      }else{\
+      print ">'${name_id}'."(NR-1)"\t"$1"\n" >>  "tree/centroids_id_'${type}'.txt"; print ">'${name_id}'."(NR-1)"\n" >> "tree/rep_set_'${type}'.fasta";for (i=2;i<=NF;i++){print toupper($i)>> "tree/rep_set_'${type}'.fasta"};print "\n" >> "tree/rep_set_'${type}'.fasta" \
+      }\
+     }}'   step2_cluster/$type/centroids_${id}/${name_id}.fasta 
+done
+done
+############################################################################dan_2aa
+mkdir -p step3_dna2aa
+
+for type_ in `cat gene_name.txt`
+do
+type=${type_%_*}
+awk 'BEGIN{RS=">"; FS="\n";OFS="";ORS=""}{\
+   if(ARGIND==1 && FNR>1){split($1,a,":");dna2aa[a[1]]=a[2]}\
+   else if(ARGIND==2 && FNR>1){print ">"$1"\n";split($2,seq_dna,"");for (i=0;i<length(seq_dna)/3;i++){char="";for (j=1;j<=3;j++){char=char seq_dna[i*3+j]} print dna2aa[char]};print "\n"}\
+   }' dna2aa.txt tree/rep_set_${type}.fasta > step3_dna2aa/protein_repset_${type}.fasta
+done
+
+
+
+ 
+############################################################################
+#cd alignment
+sed -i 's/\r//g' protein_repset_*.fas
+awk 'BEGIN{RS=">"; FS="\n";OFS="";ORS="\n";}{if(FNR>1){\
+ for (i=2;i<=NF;i++){a[$1]=a[$1]$i};\
+}}END{for (i in a){print ">"i"\n"a[i]}}' *.fas > merge.temp
+awk 'BEGIN{RS=">"; FS="\n";OFS="";ORS=""}{if ($0!~/\.[0-9]*\n/ && NR>1){print ">",$1"\n";for (i=2;i<=NF;i++){print $i};print "\n"}}' merge.temp > merge.fasta
+
+######mega建树 (用 tree/rep_set_${type}.fasta 建树)
+
+
+
+##qiime 建树
+for type_ in `cat gene_name.txt`
+do
+type=${type_%_*}
+qiime tools import \
+ --type FeatureData[Sequence] \
+ --input-path tree/rep_set_${type}.fasta \
+ --output-path tree/rep_set.qza
+
+##############建树
+qiime alignment mafft \
+  --i-sequences tree/rep_set.qza \
+  --o-alignment tree/alignmenmt_mafft.qza
+
+qiime alignment mask \
+  --i-alignment tree/alignmenmt_mafft.qza \
+  --p-min-conservation 0.4 \
+  --o-masked-alignment tree/masked_alignment.qza
+
+qiime phylogeny fasttree \
+  --i-alignment tree/masked_alignment.qza \
+  --o-tree tree/unrooted.qza
+
+qiime phylogeny midpoint-root \
+  --i-tree Tree/unrooted.qza \
+  --o-rooted-tree tree/rooted_${type}.qza
+qiime tools export tree/rooted_${type}.qza --output-dir Tree/
+mv tree/tree.nwk tree/rooted_${type}.tre
+sed -i 's/;//g' tree/rooted_${type}.tre
+sed -i 's/ /_/g' tree/rooted_${type}.tre
+sed -i "s/'//g" tree/rooted_${type}.tre
+echo `cat tree/rooted_${type}.tre`";" > tree/rooted_${type}.tre
+
+done
+
+mkdir -p alpha_div 
+for trees in `ls origin_files/trees/*.tre`
+do
+mkdir -p temp
+  tre_name=${trees##*/}
+  tre_name=${tre_name%.tre}
+  echo $tre_name
+  sed -i 's/"//g' origin_files/trees/${tre_name}.tre
+  sed -i 's/\r//g' origin_files/trees/${tre_name}.tre
+
+  qiime tools import  \
+    --type Phylogeny[Unrooted]  \
+    --input-path origin_files/trees/${tre_name}.tre  \
+    --output-path temp/unrooted.qza  \
+    --source-format NewickFormat
+  qiime phylogeny midpoint-root \
+    --i-tree temp/unrooted.qza \
+    --o-rooted-tree temp/rooted.qza
+
+  #qiime tools import  \
+    #--type Phylogeny[Rooted]  \
+    #--input-path origin_files/trees/${tre_name}.tre  \
+    #--output-path temp/rooted.qza  \
+    #--source-format NewickFormat
+
+
+  for origin_files_tab in `ls origin_files/tables/*.txt`
+  do
+    name=${origin_files_tab##*/}
+    name=${name%.txt}
+    echo $name
+    sed -i 's/"//g' origin_files/tables/${name}.txt
+    sed -i 's/\r//g' origin_files/tables/${name}.txt
+    biom convert -i origin_files/tables/${name}.txt -o temp/temp.biom --table-type="OTU table" --to-json #生成的或者过滤之后的otutable转biom
+    qiime tools import  \
+      --type FeatureTable[Frequency]  \
+      --input-path temp/temp.biom  \
+      --output-path temp/temp.qza  \
+      --source-format BIOMV210Format
+    qiime tools import \
+      --type FeatureTable[Frequency]  \
+      --input-path temp/temp.biom  \
+      --output-path temp/temp.qza  \
+      --source-format BIOMV100Format
+
+    mkdir -p temp ;mkdir -p temp/TXT
+    rm temp/TXT/*
+    for alpha_type  in  {faith_pd,chao1,observed_otus,shannon,simpson}
+    do
+      if [[ $alpha_type == faith_pd ]]; then  echo 1; alpha="alpha-phylogenetic --i-phylogeny temp/rooted.qza"; else alpha=alpha; fi
+      a=`echo "qiime diversity ${alpha} --i-table  temp/temp.qza --p-metric ${alpha_type} --o-alpha-diversity temp/alpha.qza"`
+      $a
+      qiime tools export temp/alpha.qza --output-dir  temp/TXT; mv temp/TXT/*.tsv temp/${alpha_type}_temp.txt
+      rm temp/alpha.qza
+    done
+    mv temp/*_temp.txt temp/TXT/
+    paste temp/TXT/*.txt > temp/${name}.txt
+    sed -i 's/\r//g' temp/${name}.txt
+    awk 'BEGIN{FS="\t";OFS="";ORS=""}{print $1;for(i=2;i<=NF;i++){if($1!=$i){print "\t"$i}}print"\n"}' temp/${name}.txt > alpha_div/${name}_${tre_name}.txt
+    sed -i 's/"//g' alpha_div/${name}.txt
+
+    mkdir -p beta;mkdir -p beta/beta_mat ;mkdir -p beta/beta_mat/${name};mkdir -p beta/beta_mat/${name}/${tre_name}
+
+    for Method in {unweighted_unifrac,weighted_unifrac}
+    do
+       a="qiime diversity beta-phylogenetic --i-table temp/temp.qza  --i-phylogeny temp/rooted.qza  --p-metric $Method  --o-distance-matrix temp/beta.qza"
+       $a
+       qiime tools export temp/beta.qza --output-dir beta
+       mv beta/*.tsv beta/${Method}.txt
+       rm temp/beta.qza
+    done
+    for Method in {braycurtis,jaccard}
+    do
+       a="qiime diversity beta --i-table temp/temp.qza   --p-metric $Method  --o-distance-matrix temp/beta.qza"
+       $a
+       qiime tools export temp/beta.qza --output-dir beta
+       mv beta/*.tsv beta/${Method}.txt
+       rm temp/beta.qza
+    done
+    mv beta/unweighted_unifrac.txt beta/beta_mat/${name}/${tre_name}/UN_unifrac.txt 
+    mv beta/weighted_unifrac.txt beta/beta_mat/${name}/${tre_name}/W_unifrac.txt 
+    mv beta/braycurtis.txt beta/beta_mat/${name}/${tre_name}/bray.txt 
+    mv beta/jaccard.txt beta/beta_mat/${name}/${tre_name}/jaccard.txt 
+
+  done
+  rm -r temp/*.txt temp/TXT temp/temp*
+done
+rm -r temp/
+
+   
+   
+
+
+
+   
+   
+   
