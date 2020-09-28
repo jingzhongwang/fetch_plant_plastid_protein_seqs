@@ -1,6 +1,6 @@
 atpB	ATP synthase beta subunit
-AtpF	AtpF
-AtpH	AtpH
+atpF	AtpF
+atpH	AtpH
 ccsA	cytochrome c heme attachment protein
 clpP	clp protease proteolytic subunit
 COI	cytochrome oxidase subunit 1
@@ -21,7 +21,7 @@ petB	cytochrome b6
 petD	cytochrome b6/f complex subunit IV
 petL	cytochrome b6-f subunit VI
 psbA	photosystem II protein D1
-PsbK	PsbK
+psbK	PsbK
 rpl2	ribosomal protein L2
 rpl23	ribosomal protein L23
 rpl32	ribosomal protein L32

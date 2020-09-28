@@ -6,3 +6,4 @@ aa2dna.txt and dna2aa.txt: The files used for transforming between Aminao Acids 
 pre_name.txt: The file containing all the full NCBI taxonomy of target plant species
 pre_good_gene_name.txt: The file containing all the short names of target coding genes
 pre_good_gene_name_sed.txt: The file containing all the short names followed by full names of target coding genes, which is used for filtering target sequences.
+Before run the codes, one should install the Edirect (https://www.ncbi.nlm.nih.gov/books/NBK179288/) first.
