@@ -171,12 +171,46 @@ done
 
 
  
-############################################################################
+############################################################################merge alignments
 #cd alignment
 sed -i 's/\r//g' protein_repset_*.fas
-awk 'BEGIN{RS=">"; FS="\n";OFS="";ORS="\n";}{if(FNR>1){\
- for (i=2;i<=NF;i++){a[$1]=a[$1]$i};\
-}}END{for (i in a){print ">"i"\n"a[i]}}' *.fas > merge.temp
-awk 'BEGIN{RS=">"; FS="\n";OFS="";ORS=""}{if ($0!~/\.[0-9]*\n/ && NR>1){print ">",$1"\n";for (i=2;i<=NF;i++){print $i};print "\n"}}' merge.temp > merge.fasta
+awk 'BEGIN{RS=">"; FS="\n";OFS="";ORS="";}{\
+  if(FNR>1){ for (i=2;i<=NF;i++){seq[$1,ARGIND]=seq[$1,ARGIND]$i};row[$1]="row";align_length[ARGIND]=length(seq[$1,ARGIND]) }\
+}END{\
+  for (tax_i in row){\
+    print ">" tax_i "\n";merge_seqs_tax_i="";\
+    for (cds_j in align_length){\
+      if(length(seq[tax_i,cds_j])>0){\
+        merge_seqs_tax_i=merge_seqs_tax_i seq[tax_i,cds_j];\
+      }else{\
+        temp="";for(i=1;i<=align_length[cds_j];i++){temp=temp"-"};merge_seqs_tax_i=merge_seqs_tax_i temp;\
+      }
+      print merge_seqs_tax_i"\n";\
+    };\
+  }\
 
-   
+}' *.fas > merge.temp
+awk 'BEGIN{RS=">"; FS="\n";OFS="";ORS="\n"}{if ($0!~/\.[0-9]*\n/ && NR>1){print ">",$1"\n";for (i=2;i<=NF;i++){print $i}}}' merge.temp > merge.fasta
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
